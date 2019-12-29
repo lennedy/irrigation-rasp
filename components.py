@@ -1,5 +1,8 @@
 from gpiozero import DigitalOutputDevice, Button, AnalogInputDevice, MCP3008
 
+class MyButton(Button):
+    def __init__(self, pin: int):
+        super(MyButton, self).__init__(pin=pin, pull_up=True)
 
 class Pump(DigitalOutputDevice):
     """
