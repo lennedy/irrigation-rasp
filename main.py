@@ -6,6 +6,8 @@ from statistics import median
 import json
 import requests
 import logging
+import signal, os
+from signal import pause
 
 logging.basicConfig(format='%(asctime)s %(levelname)s\t%(message)s', level=logging.WARNING)
 logger = logging.getLogger('oh-balcony')
@@ -19,12 +21,18 @@ except ImportError as err:
     exit(1)
 
 
+
 def main():
     print("Oh, Balcony!")
 
     all_off()
 
-    # time between two measurements (seconds)
+    global measure_interval
+    global moisture_values
+    global temperature_values
+    global values_count
+
+		# time between two measurements (seconds)
     measure_interval = send_measurements_interval / aggregated_measurements_count
 
     print("Measuring every", measure_interval, "seconds, aggregating", aggregated_measurements_count,
@@ -34,21 +42,32 @@ def main():
     temperature_values = {temperatureSensorName: [] for temperatureSensorName in temperature_sensors.keys()}
     values_count = 0
 
+    signal.signal(signal.SIGALRM, loop)
+    signal.alarm(int(send_measurements_interval))
+
     while True:
-        start_time = time()
-        measure_moisture(moisture_values)
-        measure_temperature(temperature_values)
-        values_count += 1
-        if values_count >= aggregated_measurements_count:
-            values_count = 0
-            aggregated_moisture_values = aggregate_values(moisture_values)
-            aggregated_temperature_values = aggregate_values(temperature_values)
-            clear_values_map(moisture_values)
-            clear_values_map(temperature_values)
-            store_and_change_state(aggregated_moisture_values, aggregated_temperature_values)
-        processing_time = time() - start_time
-        sleep_time = max(measure_interval - processing_time, 0)
-        sleep(sleep_time)
+      signal.pause()
+    signal.alarm(0)
+
+def loop(signum, frame):
+  global measure_interval
+  global moisture_values
+  global temperature_values
+  global values_count
+  start_time = time()
+  measure_moisture(moisture_values)
+  measure_temperature(temperature_values)
+  values_count += 1
+  if values_count >= aggregated_measurements_count:
+      values_count = 0
+      aggregated_moisture_values = aggregate_values(moisture_values)
+      aggregated_temperature_values = aggregate_values(temperature_values)
+      clear_values_map(moisture_values)
+      clear_values_map(temperature_values)
+      store_and_change_state(aggregated_moisture_values, aggregated_temperature_values)
+  processing_time = time() - start_time
+  sleep_time = max(measure_interval - processing_time, 0)
+  signal.alarm(int(sleep_time))
 
 
 def all_off():
