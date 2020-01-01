@@ -31,6 +31,7 @@ def main():
     global moisture_values
     global temperature_values
     global values_count
+    global button_pressed
 
 		# time between two measurements (seconds)
     measure_interval = send_measurements_interval / aggregated_measurements_count
@@ -41,6 +42,12 @@ def main():
     moisture_values = {moistureSensorName: [] for moistureSensorName in moisture_sensors.keys()}
     temperature_values = {temperatureSensorName: [] for temperatureSensorName in temperature_sensors.keys()}
     values_count = 0
+
+    button_pressed = False
+    buttons["button1"].when_pressed = pressedButton1
+    buttons["button2"].when_pressed = pressedButton2
+    buttons["button3"].when_pressed = pressedButton3
+    buttons["button4"].when_pressed = pressedButton4
 
     signal.signal(signal.SIGALRM, loop)
     signal.alarm(int(send_measurements_interval))
@@ -54,6 +61,7 @@ def loop(signum, frame):
   global moisture_values
   global temperature_values
   global values_count
+  
   start_time = time()
   measure_moisture(moisture_values)
   measure_temperature(temperature_values)
@@ -68,6 +76,42 @@ def loop(signum, frame):
   processing_time = time() - start_time
   sleep_time = max(measure_interval - processing_time, 0)
   signal.alarm(int(sleep_time))
+
+def pressedButton1():
+  global button_pressed
+  button_pressed=True
+
+  logger.info("Open valve1 button")
+  valves["valve1"].open();
+
+def pressedButton2():
+  global button_pressed
+  button_pressed=True
+
+  logger.info("Open valve2 button")
+  valves["valve2"].open();
+  sleep(2)
+  pumps["pump1"].on()
+
+def pressedButton3():
+  global button_pressed
+  button_pressed=True
+
+  logger.info("Open valve3 button")
+  valves["valve3"].open();
+  sleep(2)
+  pumps["pump1"].on()
+
+def pressedButton4():
+  global button_pressed
+  button_pressed=True
+
+  logger.info("TurnOff button")
+  pumps["pump1"].off()
+  sleep(2)
+  valves["valve1"].close();
+  valves["valve2"].close();
+  valves["valve3"].close();
 
 
 def all_off():
@@ -104,10 +148,19 @@ def clear_values_map(values_map):
 
 
 def store_and_change_state(aggregated_moisture_values, aggregated_temperature_values):
+    global button_pressed
 
     water_level_values = {name: water_level.value for name, water_level in water_levels.items()}
     pump_values = {name: pump.is_active for name, pump in pumps.items()}
     valve_values = {name: valve.is_open for name, valve in valves.items()}
+
+    pump_val = [{"id":name, "isActive":pump.is_active} for name, pump in pumps.items()]
+    valve_val = [{"id":name, "isOpen":valve.is_open} for name, valve in valves.items()]
+
+    if button_pressed:
+      pl = {"pumps": pump_val,
+            "valves": valve_val}
+      send_pump_valve_value(pl)
 
     payload = {"moisture": aggregated_moisture_values,
                "temperature": aggregated_temperature_values,
@@ -166,6 +219,22 @@ def get_service_endpoint(endpoint):
         return service_base_url + endpoint
     else:
         return service_base_url + "/" + endpoint
+
+def send_pump_valve_value(payload):
+  headers = {'content-type': 'application/json'}
+
+  try:
+##    print(get_service_endpoint("updateActuators/"))
+##  data=json.dumps(payload)
+    logger.info("Pump e Valve: " + pformat(payload))
+##    print(data)
+#    print("************************************")
+    #data=json.dumps(payload)
+    response = requests.post(get_service_endpoint("updateActuators"), data=json.dumps(payload), headers=headers, timeout=5.0)
+    #response.raise_for_status()
+
+  except:
+    logger.exception("Communication error with server")
 
 
 main()
